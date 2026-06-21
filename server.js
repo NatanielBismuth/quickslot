@@ -102,10 +102,6 @@ function toDateStr(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function validEmail(s) {
-  return typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-}
-
 // ---------- request helpers ----------
 function sendJSON(res, status, obj) {
   const body = JSON.stringify(obj);
@@ -289,13 +285,11 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && pathname === '/api/bookings') {
     const body = await readBody(req);
     const name = (body.name || '').trim();
-    const email = (body.email || '').trim();
     const date = (body.date || '').trim();
     const time = (body.time || '').trim();
     const notes = (body.notes || '').toString().slice(0, 500);
 
     if (!name) return sendJSON(res, 400, { error: 'Name is required' });
-    if (!validEmail(email)) return sendJSON(res, 400, { error: 'A valid email is required' });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return sendJSON(res, 400, { error: 'Invalid date' });
     if (!/^\d{2}:\d{2}$/.test(time)) return sendJSON(res, 400, { error: 'Invalid time' });
 
@@ -308,7 +302,6 @@ async function handleApi(req, res, url) {
     const booking = {
       id: crypto.randomUUID(),
       name: name.slice(0, 80),
-      email: email.slice(0, 120),
       date,
       time,
       notes,

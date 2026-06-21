@@ -187,7 +187,7 @@ async function loadBookings() {
     const statusLabel = b.status === 'cancelled' ? T.cancelled : T.confirmed;
     rows += `<tr>
       <td>${prettyDate(b.date)}<br><span class="muted">${formatTime(b.time)}</span></td>
-      <td>${esc(b.name)}<br><span class="muted">${esc(b.email)}</span></td>
+      <td>${esc(b.name)}</td>
       <td>${b.notes ? esc(b.notes) : '<span class="muted">—</span>'}</td>
       <td><span class="badge ${b.status}">${statusLabel}</span></td>
       <td>${b.status === 'confirmed' ? `<button class="link-btn" data-id="${b.id}">${T.cancel}</button>` : ''}</td>

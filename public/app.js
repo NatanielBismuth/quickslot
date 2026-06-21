@@ -17,15 +17,13 @@ const I18N = {
     step3: 'הפרטים שלכם',
     noSlots: 'אין שעות פנויות ביום זה. נסו תאריך אחר.',
     nameLabel: 'שם מלא',
-    emailLabel: 'אימייל',
     notesLabel: 'הערות',
     optional: '(אופציונלי)',
     namePh: 'ישראל ישראלי',
-    emailPh: 'israel@example.com',
     notesPh: 'משהו שכדאי שנדע?',
     confirm: 'אישור הזמנה',
     doneTitle: 'נקבע התור!',
-    doneNote: 'אישור נשמר עבור כתובת האימייל שמסרתם.',
+    doneNote: 'התור שלכם נשמר. נתראה!',
     another: 'קביעת תור נוסף',
     loading: 'טוען…',
     booking: 'מזמינים…',
@@ -34,7 +32,6 @@ const I18N = {
     summary: (date, time, tz) => `📅 <strong>${date}</strong> בשעה <strong>${time}</strong> <span class="muted">(${tz})</span>`,
     done: (name, date, time, tz) => `${name}, התור שלכם נקבע ל־<strong>${date}</strong> בשעה <strong>${time}</strong> <span class="muted">(${tz})</span>.`,
     errName: 'נא להזין שם מלא',
-    errEmail: 'נא להזין כתובת אימייל תקינה',
     errTaken: 'מצטערים, השעה הזו כבר נתפסה.',
     errGeneric: 'לא ניתן להשלים את ההזמנה',
   },
@@ -47,15 +44,13 @@ const I18N = {
     step3: 'Your details',
     noSlots: 'No open times for this day. Try another date.',
     nameLabel: 'Full name',
-    emailLabel: 'Email',
     notesLabel: 'Notes',
     optional: '(optional)',
     namePh: 'Jane Doe',
-    emailPh: 'jane@example.com',
     notesPh: 'Anything we should know?',
     confirm: 'Confirm booking',
     doneTitle: "You're booked!",
-    doneNote: 'A confirmation has been recorded for the email you provided.',
+    doneNote: 'Your appointment is saved — see you then!',
     another: 'Book another time',
     loading: 'Loading…',
     booking: 'Booking…',
@@ -64,7 +59,6 @@ const I18N = {
     summary: (date, time, tz) => `📅 <strong>${date}</strong> at <strong>${time}</strong> <span class="muted">(${tz})</span>`,
     done: (name, date, time, tz) => `${name}, your appointment is set for <strong>${date}</strong> at <strong>${time}</strong> <span class="muted">(${tz})</span>.`,
     errName: 'Name is required',
-    errEmail: 'A valid email is required',
     errTaken: 'Sorry, that slot is no longer available.',
     errGeneric: 'Could not complete booking',
   },
@@ -280,7 +274,6 @@ function selectTime(time, instant, el) {
 
 function localizeError(serverMsg) {
   if (/no longer available/i.test(serverMsg)) return t('errTaken');
-  if (/valid email/i.test(serverMsg)) return t('errEmail');
   if (/name is required/i.test(serverMsg)) return t('errName');
   return serverMsg || t('errGeneric');
 }
@@ -293,7 +286,6 @@ async function submitBooking(e) {
 
   const payload = {
     name: $('name').value.trim(),
-    email: $('email').value.trim(),
     notes: $('notes').value.trim(),
     date: state.selectedDate,
     time: state.selectedTime,
