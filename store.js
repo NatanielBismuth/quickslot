@@ -67,6 +67,13 @@ function createFileStore(dataDir) {
       writeJSON(BOOKINGS_FILE, all);
       return all[i];
     },
+    async deleteBooking(id) {
+      const all = readJSON(BOOKINGS_FILE, []);
+      const remaining = all.filter((x) => x.id !== id);
+      if (remaining.length === all.length) return false;
+      writeJSON(BOOKINGS_FILE, remaining);
+      return true;
+    },
   };
 }
 
@@ -116,6 +123,10 @@ function createPgStore(connectionString) {
       const data = { ...r.rows[0].data, status: 'cancelled' };
       await pool.query('UPDATE bookings SET data = $2 WHERE id = $1', [id, data]);
       return data;
+    },
+    async deleteBooking(id) {
+      const r = await pool.query('DELETE FROM bookings WHERE id = $1', [id]);
+      return r.rowCount > 0;
     },
   };
 }

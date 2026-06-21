@@ -322,10 +322,16 @@ async function handleApi(req, res, url) {
     return sendJSON(res, 200, sorted);
   }
 
-  // DELETE /api/bookings/:id  (admin cancel)
+  // DELETE /api/bookings/:id        (admin) — cancel (soft): frees slot, keeps record
+  // DELETE /api/bookings/:id?purge=1 (admin) — delete (hard): removes the record entirely
   if (req.method === 'DELETE' && pathname.startsWith('/api/bookings/')) {
     if (!requireAdmin(req, res)) return;
     const id = pathname.split('/').pop();
+    if (url.searchParams.get('purge') === '1') {
+      const ok = await store.deleteBooking(id);
+      if (!ok) return sendJSON(res, 404, { error: 'Booking not found' });
+      return sendJSON(res, 200, { id, deleted: true });
+    }
     const cancelled = await store.cancelBooking(id);
     if (!cancelled) return sendJSON(res, 404, { error: 'Booking not found' });
     return sendJSON(res, 200, cancelled);

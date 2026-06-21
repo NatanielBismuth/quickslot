@@ -12,7 +12,9 @@ const T = {
   active: (n) => `· ${n} פעילים`,
   thWhen: 'מתי', thWho: 'מי', thNotes: 'הערות', thStatus: 'סטטוס',
   cancel: 'ביטול',
+  del: 'מחיקה',
   confirmCancel: 'לבטל את התור? המשבצת תתפנה מחדש.',
+  confirmDelete: 'למחוק את התור לצמיתות? לא ניתן לשחזר.',
   confirmed: 'מאושר', cancelled: 'מבוטל',
   saveFail: 'השמירה נכשלה',
   loginFail: 'הכניסה נכשלה',
@@ -185,12 +187,17 @@ async function loadBookings() {
   let rows = '';
   for (const b of bookings) {
     const statusLabel = b.status === 'cancelled' ? T.cancelled : T.confirmed;
+    let actions = '';
+    if (b.status === 'confirmed') {
+      actions += `<button class="link-btn" data-act="cancel" data-id="${b.id}">${T.cancel}</button> `;
+    }
+    actions += `<button class="link-btn danger" data-act="delete" data-id="${b.id}">${T.del}</button>`;
     rows += `<tr>
       <td>${prettyDate(b.date)}<br><span class="muted">${formatTime(b.time)}</span></td>
       <td>${esc(b.name)}</td>
       <td>${b.notes ? esc(b.notes) : '<span class="muted">—</span>'}</td>
       <td><span class="badge ${b.status}">${statusLabel}</span></td>
-      <td>${b.status === 'confirmed' ? `<button class="link-btn" data-id="${b.id}">${T.cancel}</button>` : ''}</td>
+      <td>${actions}</td>
     </tr>`;
   }
   wrap.innerHTML = `<table class="admin-table">
@@ -199,9 +206,11 @@ async function loadBookings() {
 
   wrap.querySelectorAll('.link-btn').forEach((btn) => {
     btn.onclick = async () => {
-      if (!confirm(T.confirmCancel)) return;
+      const hard = btn.dataset.act === 'delete';
+      if (!confirm(hard ? T.confirmDelete : T.confirmCancel)) return;
+      const url = '/api/bookings/' + btn.dataset.id + (hard ? '?purge=1' : '');
       try {
-        await authFetch('/api/bookings/' + btn.dataset.id, { method: 'DELETE' });
+        await authFetch(url, { method: 'DELETE' });
       } catch (e) { return; }
       loadBookings();
     };
