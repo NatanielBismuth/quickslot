@@ -10,15 +10,51 @@ const path = require('path');
 
 const SERVER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
+// Per-day opening hours. Keys 0=Sunday … 6=Saturday.
+// Each day is { open: true, start: 'HH:MM', end: 'HH:MM' } or { open: false }.
+const DEFAULT_HOURS = {
+  0: { open: true, start: '09:00', end: '17:00' },
+  1: { open: true, start: '09:00', end: '17:00' },
+  2: { open: true, start: '09:00', end: '17:00' },
+  3: { open: true, start: '09:00', end: '17:00' },
+  4: { open: true, start: '09:00', end: '17:00' },
+  5: { open: false },
+  6: { open: false },
+};
+
 const DEFAULT_CONFIG = {
   businessName: 'QuickSlot',
-  workingDays: [1, 2, 3, 4, 5], // 0 = Sunday ... 6 = Saturday
-  startHour: 9,
-  endHour: 17,
   slotMinutes: 30,
   maxDaysAhead: 30,
   timezone: SERVER_TZ, // IANA tz the slots are defined in
+  hours: DEFAULT_HOURS,
 };
+
+// Normalize a stored config to the current shape. Migrates legacy configs that
+// used workingDays + startHour/endHour into the per-day `hours` structure.
+function normalizeConfig(stored) {
+  const s = stored || {};
+  const cfg = {
+    businessName: s.businessName != null ? s.businessName : DEFAULT_CONFIG.businessName,
+    slotMinutes: s.slotMinutes != null ? s.slotMinutes : DEFAULT_CONFIG.slotMinutes,
+    maxDaysAhead: s.maxDaysAhead != null ? s.maxDaysAhead : DEFAULT_CONFIG.maxDaysAhead,
+    timezone: s.timezone != null ? s.timezone : DEFAULT_CONFIG.timezone,
+  };
+  if (s.hours && typeof s.hours === 'object') {
+    cfg.hours = s.hours;
+  } else {
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const wd = Array.isArray(s.workingDays) ? s.workingDays : [0, 1, 2, 3, 4];
+    const start = Number.isInteger(s.startHour) ? pad2(s.startHour) + ':00' : '09:00';
+    const end = Number.isInteger(s.endHour)
+      ? (s.endHour >= 24 ? '23:59' : pad2(s.endHour) + ':00')
+      : '17:00';
+    const hours = {};
+    for (let d = 0; d < 7; d++) hours[d] = wd.includes(d) ? { open: true, start, end } : { open: false };
+    cfg.hours = hours;
+  }
+  return cfg;
+}
 
 // ---------- file backend ----------
 function createFileStore(dataDir) {
@@ -44,7 +80,7 @@ function createFileStore(dataDir) {
       if (!fs.existsSync(CONFIG_FILE)) writeJSON(CONFIG_FILE, DEFAULT_CONFIG);
     },
     async getConfig() {
-      return { ...DEFAULT_CONFIG, ...readJSON(CONFIG_FILE, {}) };
+      return normalizeConfig(readJSON(CONFIG_FILE, {}));
     },
     async saveConfig(cfg) {
       writeJSON(CONFIG_FILE, cfg);
@@ -117,7 +153,7 @@ function createPgStore(connectionString) {
     },
     async getConfig() {
       const r = await pool.query('SELECT data FROM app_config WHERE id = 1');
-      return r.rowCount ? { ...DEFAULT_CONFIG, ...r.rows[0].data } : { ...DEFAULT_CONFIG };
+      return normalizeConfig(r.rowCount ? r.rows[0].data : {});
     },
     async saveConfig(cfg) {
       await pool.query(

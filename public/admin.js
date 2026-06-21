@@ -1,7 +1,7 @@
 'use strict';
 
-// Hebrew weekday letters, Sunday → Saturday
-const DOW_HE = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'שבת'];
+// Full Hebrew weekday names, Sunday → Saturday
+const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const $ = (id) => document.getElementById(id);
 const TOKEN_KEY = 'quickslot_admin_token';
 const LOCALE = 'he-IL';
@@ -20,8 +20,6 @@ const T = {
   loginFail: 'הכניסה נכשלה',
   sessionExpired: 'פג תוקף החיבור — יש להתחבר מחדש.',
 };
-
-let workingDays = [];
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function prettyDate(dateStr) {
@@ -113,29 +111,52 @@ function logout() {
 async function loadConfig() {
   const c = await fetch('/api/config').then((r) => r.json());
   $('businessName').value = c.businessName || '';
-  $('startHour').value = c.startHour;
-  $('endHour').value = c.endHour;
   $('slotMinutes').value = c.slotMinutes;
   $('maxDaysAhead').value = c.maxDaysAhead;
   populateTimezones(c.timezone);
-  workingDays = [...c.workingDays];
-  renderDaysPick();
+  renderSchedule(c.hours || {});
 }
 
-function renderDaysPick() {
-  const wrap = $('daysPick');
+// One editable row per weekday: [✓ open] [start time] – [end time]
+function renderSchedule(hours) {
+  const wrap = $('schedule');
   wrap.innerHTML = '';
-  DOW_HE.forEach((label, idx) => {
-    const el = document.createElement('div');
-    el.className = 'daychip' + (workingDays.includes(idx) ? ' on' : '');
-    el.textContent = label;
-    el.onclick = () => {
-      if (workingDays.includes(idx)) workingDays = workingDays.filter((d) => d !== idx);
-      else workingDays.push(idx);
-      renderDaysPick();
+  for (let d = 0; d < 7; d++) {
+    const h = hours[d] || hours[String(d)] || { open: false };
+    const row = document.createElement('div');
+    row.className = 'sched-row';
+    row.innerHTML =
+      `<label class="sched-day"><input type="checkbox" class="sched-open" data-d="${d}" ${h.open ? 'checked' : ''}/> ${DAY_NAMES[d]}</label>` +
+      `<input type="time" class="sched-start" data-d="${d}" value="${h.start || '09:00'}" ${h.open ? '' : 'disabled'} />` +
+      `<span class="sched-sep">–</span>` +
+      `<input type="time" class="sched-end" data-d="${d}" value="${h.end || '17:00'}" ${h.open ? '' : 'disabled'} />`;
+    wrap.appendChild(row);
+  }
+  wrap.querySelectorAll('.sched-open').forEach((cb) => {
+    cb.onchange = () => {
+      const d = cb.dataset.d;
+      wrap.querySelector(`.sched-start[data-d="${d}"]`).disabled = !cb.checked;
+      wrap.querySelector(`.sched-end[data-d="${d}"]`).disabled = !cb.checked;
     };
-    wrap.appendChild(el);
   });
+}
+
+function gatherHours() {
+  const wrap = $('schedule');
+  const hours = {};
+  for (let d = 0; d < 7; d++) {
+    const cb = wrap.querySelector(`.sched-open[data-d="${d}"]`);
+    if (cb && cb.checked) {
+      hours[d] = {
+        open: true,
+        start: wrap.querySelector(`.sched-start[data-d="${d}"]`).value,
+        end: wrap.querySelector(`.sched-end[data-d="${d}"]`).value,
+      };
+    } else {
+      hours[d] = { open: false };
+    }
+  }
+  return hours;
 }
 
 async function saveConfig(e) {
@@ -144,12 +165,10 @@ async function saveConfig(e) {
   err.classList.add('hidden');
   const payload = {
     businessName: $('businessName').value.trim(),
-    workingDays: workingDays.sort((a, b) => a - b),
-    startHour: parseInt($('startHour').value, 10),
-    endHour: parseInt($('endHour').value, 10),
     slotMinutes: parseInt($('slotMinutes').value, 10),
     maxDaysAhead: parseInt($('maxDaysAhead').value, 10),
     timezone: $('timezone').value,
+    hours: gatherHours(),
   };
   let res;
   try {
@@ -223,7 +242,8 @@ function translateServerError(msg) {
   if (/incorrect password/i.test(msg)) return 'סיסמה שגויה';
   const tooMany = msg.match(/try again in (\d+) min/i);
   if (tooMany) return `יותר מדי ניסיונות. נסו שוב בעוד ${tooMany[1]} דקות.`;
-  if (/end hour must be after/i.test(msg)) return 'שעת הסיום חייבת להיות אחרי שעת ההתחלה';
+  if (/end (hour|time) must be after/i.test(msg)) return 'שעת הסיום חייבת להיות אחרי שעת ההתחלה';
+  if (/invalid time/i.test(msg)) return 'שעה לא תקינה (השתמשו בפורמט HH:MM)';
   if (/unknown timezone/i.test(msg)) return 'אזור זמן לא מוכר';
   if (/unauthorized/i.test(msg)) return T.sessionExpired;
   return msg;

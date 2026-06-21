@@ -229,7 +229,8 @@ function renderDays() {
     const dateStr = toDateStr(d);
 
     const daysAhead = Math.round((d - today) / 86400000);
-    const isWorking = state.config.workingDays.includes(d.getDay());
+    const dayHours = state.config.hours && state.config.hours[d.getDay()];
+    const isWorking = !!(dayHours && dayHours.open);
     const tooFar = daysAhead > state.config.maxDaysAhead;
     const disabled = !isWorking || tooFar;
 

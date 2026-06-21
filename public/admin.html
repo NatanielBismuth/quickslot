@@ -34,12 +34,8 @@
       <form id="configForm">
         <label>שם העסק <input type="text" id="businessName" maxlength="80" /></label>
         <div>
-          <div class="muted" style="margin-bottom:6px;">ימי עבודה</div>
-          <div class="days-pick" id="daysPick"></div>
-        </div>
-        <div class="row-2">
-          <label>שעת התחלה (0–23) <input type="number" id="startHour" min="0" max="23" /></label>
-          <label>שעת סיום (1–24) <input type="number" id="endHour" min="1" max="24" /></label>
+          <div class="muted" style="margin-bottom:6px;">שעות פעילות לפי יום</div>
+          <div class="schedule" id="schedule"></div>
         </div>
         <div class="row-2">
           <label>אורך פגישה (דקות) <input type="number" id="slotMinutes" min="5" max="240" step="5" /></label>

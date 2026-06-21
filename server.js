@@ -96,8 +96,17 @@ function pad(n) {
   return String(n).padStart(2, '0');
 }
 
-// Returns "HH:MM" slot strings for a given date based on config,
-// excluding already-booked slots and any slot whose instant is in the past.
+// "HH:MM" <-> minutes-since-midnight
+function hmToMin(s) {
+  const [h, m] = String(s).split(':').map(Number);
+  return h * 60 + m;
+}
+function minToHM(mins) {
+  return `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
+}
+
+// Returns "HH:MM" slot strings for a given date based on that day's opening
+// hours, excluding booked slots and any slot whose instant is in the past.
 async function getSlotsForDate(dateStr) {
   const config = await store.getConfig();
   const bookings = await store.listBookings();
@@ -107,9 +116,14 @@ async function getSlotsForDate(dateStr) {
   if (isNaN(date.getTime())) return { error: 'Invalid date' };
 
   const dow = date.getDay();
-  if (!config.workingDays.includes(dow)) {
+  const day = config.hours && config.hours[dow];
+  if (!day || !day.open) {
     return { date: dateStr, slots: [], closed: true, timezone: tz };
   }
+
+  const startMin = hmToMin(day.start);
+  const endMin = hmToMin(day.end);
+  const step = config.slotMinutes;
 
   const takenTimes = new Set(
     bookings
@@ -120,14 +134,13 @@ async function getSlotsForDate(dateStr) {
   const slots = [];
   const nowMs = Date.now();
 
-  for (let h = config.startHour; h < config.endHour; h++) {
-    for (let m = 0; m < 60; m += config.slotMinutes) {
-      const time = `${pad(h)}:${pad(m)}`;
-      if (takenTimes.has(time)) continue;
-      // skip slots already in the past (relative to the business timezone)
-      if (zonedToInstant(dateStr, time, tz) <= nowMs) continue;
-      slots.push(time);
-    }
+  // a slot must fully fit inside the window: its start + duration <= close
+  for (let mins = startMin; mins + step <= endMin; mins += step) {
+    const time = minToHM(mins);
+    if (takenTimes.has(time)) continue;
+    // skip slots already in the past (relative to the business timezone)
+    if (zonedToInstant(dateStr, time, tz) <= nowMs) continue;
+    slots.push(time);
   }
 
   return { date: dateStr, slots, closed: false, timezone: tz };
@@ -297,16 +310,31 @@ async function handleApi(req, res, url) {
     const config = await store.getConfig();
     const merged = { ...config };
     if (typeof body.businessName === 'string') merged.businessName = body.businessName.slice(0, 80);
-    if (Array.isArray(body.workingDays)) merged.workingDays = body.workingDays.filter((d) => d >= 0 && d <= 6);
-    if (Number.isInteger(body.startHour)) merged.startHour = clamp(body.startHour, 0, 23);
-    if (Number.isInteger(body.endHour)) merged.endHour = clamp(body.endHour, 1, 24);
     if (Number.isInteger(body.slotMinutes)) merged.slotMinutes = clamp(body.slotMinutes, 5, 240);
     if (Number.isInteger(body.maxDaysAhead)) merged.maxDaysAhead = clamp(body.maxDaysAhead, 1, 365);
     if (typeof body.timezone === 'string') {
       if (!isValidTimezone(body.timezone)) return sendJSON(res, 400, { error: 'Unknown timezone' });
       merged.timezone = body.timezone;
     }
-    if (merged.endHour <= merged.startHour) return sendJSON(res, 400, { error: 'End hour must be after start hour' });
+    if (body.hours && typeof body.hours === 'object') {
+      const isHHMM = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+      const hours = {};
+      for (let d = 0; d < 7; d++) {
+        const src = body.hours[d] || body.hours[String(d)];
+        if (src && src.open) {
+          if (!isHHMM(src.start) || !isHHMM(src.end)) {
+            return sendJSON(res, 400, { error: 'Invalid time (use HH:MM)' });
+          }
+          if (hmToMin(src.end) <= hmToMin(src.start)) {
+            return sendJSON(res, 400, { error: 'End time must be after start time' });
+          }
+          hours[d] = { open: true, start: src.start, end: src.end };
+        } else {
+          hours[d] = { open: false };
+        }
+      }
+      merged.hours = hours;
+    }
     await store.saveConfig(merged);
     return sendJSON(res, 200, merged);
   }
