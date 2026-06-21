@@ -3,6 +3,7 @@
 const DAYS_VISIBLE = 5;
 const VISITOR_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 const LANG_KEY = 'quickslot_lang';
+const MINE_KEY = 'quickslot_my_bookings';
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,6 +35,13 @@ const I18N = {
     errName: 'נא להזין שם מלא',
     errTaken: 'מצטערים, השעה הזו כבר נתפסה.',
     errGeneric: 'לא ניתן להשלים את ההזמנה',
+    myTitle: 'התורים שלי',
+    cancelThis: 'ביטול התור',
+    cancelBtn: 'ביטול',
+    confirmCancel: 'לבטל את התור הזה?',
+    cancelFail: 'ביטול התור נכשל',
+    cancelledMsg: 'התור בוטל.',
+    myItem: (date, time, tz) => `📅 ${date} בשעה ${time} <span class="muted">(${tz})</span>`,
   },
   en: {
     docTitle: 'Book an Appointment',
@@ -61,6 +69,13 @@ const I18N = {
     errName: 'Name is required',
     errTaken: 'Sorry, that slot is no longer available.',
     errGeneric: 'Could not complete booking',
+    myTitle: 'My appointments',
+    cancelThis: 'Cancel appointment',
+    cancelBtn: 'Cancel',
+    confirmCancel: 'Cancel this appointment?',
+    cancelFail: 'Could not cancel the appointment',
+    cancelledMsg: 'Appointment cancelled.',
+    myItem: (date, time, tz) => `📅 ${date} at ${time} <span class="muted">(${tz})</span>`,
   },
 };
 
@@ -72,7 +87,26 @@ const state = {
   selectedTime: null,
   selectedInstant: null,
   businessTz: VISITOR_TZ,
+  lastBookingId: null,
 };
+
+// ---------- "my bookings" (stored locally; no account needed) ----------
+// Each entry: { id, name, date, time }. The id is the server-issued UUID and
+// doubles as the capability token for cancelling.
+function loadMine() {
+  try { return JSON.parse(localStorage.getItem(MINE_KEY)) || []; } catch (e) { return []; }
+}
+function saveMine(list) {
+  localStorage.setItem(MINE_KEY, JSON.stringify(list));
+}
+function addMine(b) {
+  const list = loadMine().filter((x) => x.id !== b.id);
+  list.push({ id: b.id, name: b.name, date: b.date, time: b.time });
+  saveMine(list);
+}
+function removeMine(id) {
+  saveMine(loadMine().filter((x) => x.id !== id));
+}
 
 function t(key, ...args) {
   const v = I18N[state.lang][key];
@@ -153,6 +187,7 @@ function setLang(lang) {
   localStorage.setItem(LANG_KEY, lang);
   applyStaticText();
   renderDays();
+  renderMine();
   // re-render the open time list / summaries if a date is already chosen
   if (state.selectedDate) selectDate(state.selectedDate);
 }
@@ -175,7 +210,9 @@ async function init() {
   };
   $('bookingForm').onsubmit = submitBooking;
   $('bookAnother').onclick = resetFlow;
+  $('cancelMine').onclick = () => { if (state.lastBookingId) cancelById(state.lastBookingId); };
   document.querySelectorAll('.lang-btn').forEach((b) => (b.onclick = () => setLang(b.dataset.lang)));
+  renderMine();
 }
 
 function renderDays() {
@@ -303,6 +340,10 @@ async function submitBooking(e) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'err');
 
+    // remember this booking locally so the visitor can cancel it later
+    state.lastBookingId = data.id;
+    addMine(data);
+
     const shownTime = state.selectedInstant ? fmtInTz(state.selectedInstant, VISITOR_TZ) : payload.time;
     $('doneSummary').innerHTML = t('done', payload.name, prettyDate(payload.date), shownTime, VISITOR_TZ);
     ['step-date', 'step-time', 'step-details'].forEach((s) => $(s).classList.add('hidden'));
@@ -327,7 +368,67 @@ function resetFlow() {
   ['step-time', 'step-details', 'step-done'].forEach((s) => $(s).classList.add('hidden'));
   $('step-date').classList.remove('hidden');
   renderDays();
+  renderMine();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---------- my appointments ----------
+// Render the visitor's own upcoming, non-cancelled bookings with a cancel button.
+function renderMine() {
+  const section = $('my-appts');
+  const listEl = $('myList');
+  if (!section || !listEl) return;
+  const tz = (state.config && state.config.timezone) || VISITOR_TZ;
+  const now = Date.now();
+  const mine = loadMine()
+    .filter((b) => slotInstant(b.date, b.time, tz).getTime() > now)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+  if (mine.length === 0) {
+    section.classList.add('hidden');
+    listEl.innerHTML = '';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  for (const b of mine) {
+    const instant = slotInstant(b.date, b.time, tz);
+    const shown = fmtInTz(instant, VISITOR_TZ);
+    const row = document.createElement('div');
+    row.className = 'my-item';
+    const info = document.createElement('div');
+    info.innerHTML = t('myItem', prettyDate(b.date), shown, VISITOR_TZ);
+    const btn = document.createElement('button');
+    btn.className = 'ghost danger small';
+    btn.textContent = t('cancelBtn');
+    btn.onclick = () => cancelById(b.id, btn);
+    row.appendChild(info);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  }
+  section.classList.remove('hidden');
+}
+
+// Cancel a booking by id (the id is the capability token). On success the slot
+// frees up and the entry is removed from local storage.
+async function cancelById(id, btn) {
+  if (!confirm(t('confirmCancel'))) return;
+  if (btn) { btn.disabled = true; }
+  try {
+    const res = await fetch('/api/bookings/' + encodeURIComponent(id) + '/cancel', { method: 'POST' });
+    if (!res.ok && res.status !== 404) throw new Error('cancel failed');
+    // 404 → already gone server-side; drop it locally either way.
+    removeMine(id);
+    renderMine();
+    // if the just-confirmed booking was cancelled, return to the start
+    if (state.lastBookingId === id) {
+      state.lastBookingId = null;
+      resetFlow();
+    }
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    alert(t('cancelFail'));
+  }
 }
 
 init();

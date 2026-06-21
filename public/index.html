@@ -20,6 +20,12 @@
       <p class="sub" data-i18n="subtitle">אין צורך בחשבון — בחרו זמן שמתאים לכם.</p>
     </header>
 
+    <!-- MY APPOINTMENTS (shown only if this visitor has upcoming bookings) -->
+    <section id="my-appts" class="step hidden">
+      <h2 data-i18n="myTitle">התורים שלי</h2>
+      <div class="my-list" id="myList"></div>
+    </section>
+
     <!-- STEP 1: pick a date -->
     <section id="step-date" class="step">
       <h2><span class="num">1</span> <span data-i18n="step1">בחירת תאריך</span></h2>
@@ -59,7 +65,10 @@
         <h2 data-i18n="doneTitle">נקבע התור!</h2>
         <p id="doneSummary"></p>
         <p class="muted" data-i18n="doneNote">אישור נשמר עבור כתובת האימייל שמסרתם.</p>
-        <button class="ghost" id="bookAnother" data-i18n="another">קביעת תור נוסף</button>
+        <div class="done-actions">
+          <button class="ghost" id="bookAnother" data-i18n="another">קביעת תור נוסף</button>
+          <button class="ghost danger" id="cancelMine" data-i18n="cancelThis">ביטול התור</button>
+        </div>
       </div>
     </section>
   </main>

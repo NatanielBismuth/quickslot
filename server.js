@@ -356,6 +356,16 @@ async function handleApi(req, res, url) {
     return sendJSON(res, 201, created);
   }
 
+  // POST /api/bookings/:id/cancel  (public) — a customer cancels their own booking.
+  // The booking id is an unguessable UUID, so possession of it is the authorization
+  // (no account needed). Soft-cancel only: frees the slot, keeps the record.
+  if (req.method === 'POST' && /^\/api\/bookings\/[^/]+\/cancel$/.test(pathname)) {
+    const id = pathname.split('/')[3];
+    const cancelled = await store.cancelBooking(id);
+    if (!cancelled) return sendJSON(res, 404, { error: 'Booking not found' });
+    return sendJSON(res, 200, cancelled);
+  }
+
   // GET /api/bookings  (admin) — list confirmed/cancelled
   if (req.method === 'GET' && pathname === '/api/bookings') {
     if (!requireAdmin(req, res)) return;

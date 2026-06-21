@@ -165,6 +165,18 @@ button { font-family: inherit; font-size: 15px; cursor: pointer; }
   padding: 10px 14px; transition: .15s;
 }
 .ghost:hover { border-color: var(--accent); }
+.ghost.danger { color: var(--danger); }
+.ghost.danger:hover { border-color: var(--danger); }
+.ghost.small { padding: 7px 12px; font-size: 14px; }
+
+/* my appointments */
+.my-list { display: flex; flex-direction: column; gap: 10px; }
+.my-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.3);
+  border-radius: 10px; padding: 12px 14px; font-size: 14px;
+}
+.done-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
 .error { color: var(--danger); font-size: 14px; margin: 0; }
 .empty { color: var(--muted); text-align: center; padding: 16px; }
