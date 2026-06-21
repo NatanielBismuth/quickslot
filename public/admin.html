@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ניהול · QuickSlot</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- LOGIN GATE -->
+  <main class="card" id="loginCard" style="max-width: 420px;">
+    <header class="hero">
+      <div class="brand">ניהול</div>
+      <h1>כניסת מנהל</h1>
+      <p class="sub">הזינו את סיסמת הניהול כדי להמשיך.</p>
+    </header>
+    <form id="loginForm" style="display:flex; flex-direction:column; gap:14px;">
+      <label>סיסמה <input type="password" id="adminPassword" required autofocus /></label>
+      <p class="error hidden" id="loginError"></p>
+      <button type="submit" class="primary">כניסה</button>
+    </form>
+    <footer class="foot"><a href="/">חזרה לדף קביעת התור →</a></footer>
+  </main>
+
+  <main class="card hidden" id="adminCard" style="max-width: 760px;">
+    <header class="hero">
+      <div class="brand">ניהול</div>
+      <h1>ניהול תורים</h1>
+      <p class="sub">צפייה בתורים והגדרת הזמינות שלכם. <button class="link-btn" id="logoutBtn" style="color:var(--muted);">התנתקות</button></p>
+    </header>
+
+    <section class="step">
+      <h2><span class="num">★</span> זמינות</h2>
+      <form id="configForm">
+        <label>שם העסק <input type="text" id="businessName" maxlength="80" /></label>
+        <div>
+          <div class="muted" style="margin-bottom:6px;">ימי עבודה</div>
+          <div class="days-pick" id="daysPick"></div>
+        </div>
+        <div class="row-2">
+          <label>שעת התחלה (0–23) <input type="number" id="startHour" min="0" max="23" /></label>
+          <label>שעת סיום (1–24) <input type="number" id="endHour" min="1" max="24" /></label>
+        </div>
+        <div class="row-2">
+          <label>אורך פגישה (דקות) <input type="number" id="slotMinutes" min="5" max="240" step="5" /></label>
+          <label>טווח ימים לקביעה מראש <input type="number" id="maxDaysAhead" min="1" max="365" /></label>
+        </div>
+        <label>אזור זמן (השעות מוגדרות לפי אזור זה)
+          <select id="timezone"></select>
+        </label>
+        <p class="error hidden" id="configError"></p>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <button type="submit" class="primary" style="max-width:200px;">שמירת הגדרות</button>
+          <span class="saved hidden" id="savedMsg">✓ נשמר</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="step">
+      <h2><span class="num">≡</span> תורים <span class="muted" id="count"></span></h2>
+      <div id="bookingsWrap"></div>
+    </section>
+
+    <footer class="foot"><a href="/">חזרה לדף קביעת התור →</a></footer>
+  </main>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

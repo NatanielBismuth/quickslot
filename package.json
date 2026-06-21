@@ -1,0 +1,16 @@
+{
+  "name": "quickslot",
+  "version": "1.0.0",
+  "description": "Calendly-style appointment scheduler — no login required.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "license": "MIT"
+}

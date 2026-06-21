@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="docTitle">קביעת תור</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+</head>
+<body>
+  <main class="card">
+    <div class="lang-switch">
+      <button class="lang-btn" data-lang="he">עברית</button>
+      <button class="lang-btn" data-lang="en">English</button>
+    </div>
+
+    <header class="hero">
+      <div class="brand" id="brand">QuickSlot</div>
+      <h1 data-i18n="title">קביעת תור</h1>
+      <p class="sub" data-i18n="subtitle">אין צורך בחשבון — בחרו זמן שמתאים לכם.</p>
+    </header>
+
+    <!-- STEP 1: pick a date -->
+    <section id="step-date" class="step">
+      <h2><span class="num">1</span> <span data-i18n="step1">בחירת תאריך</span></h2>
+      <div class="date-picker">
+        <button class="ghost nav-prev" id="prevWeek" aria-label="prev">‹</button>
+        <div class="days" id="days"></div>
+        <button class="ghost nav-next" id="nextWeek" aria-label="next">›</button>
+      </div>
+    </section>
+
+    <!-- STEP 2: pick a time -->
+    <section id="step-time" class="step hidden">
+      <h2><span class="num">2</span> <span data-i18n="step2">בחירת שעה</span> <span class="muted" id="selectedDateLabel"></span></h2>
+      <p class="muted tz-note" id="tzNote"></p>
+      <div class="slots" id="slots"></div>
+      <p class="empty hidden" id="noSlots" data-i18n="noSlots">אין שעות פנויות ביום זה. נסו תאריך אחר.</p>
+    </section>
+
+    <!-- STEP 3: details -->
+    <section id="step-details" class="step hidden">
+      <h2><span class="num">3</span> <span data-i18n="step3">הפרטים שלכם</span></h2>
+      <form id="bookingForm">
+        <label><span data-i18n="nameLabel">שם מלא</span> <input type="text" id="name" required maxlength="80" data-i18n-ph="namePh" placeholder="ישראל ישראלי" /></label>
+        <label><span data-i18n="emailLabel">אימייל</span> <input type="email" id="email" required maxlength="120" data-i18n-ph="emailPh" placeholder="israel@example.com" /></label>
+        <label><span data-i18n="notesLabel">הערות</span> <span class="muted" data-i18n="optional">(אופציונלי)</span>
+          <textarea id="notes" maxlength="500" rows="3" data-i18n-ph="notesPh" placeholder="משהו שכדאי שנדע?"></textarea>
+        </label>
+        <div class="summary" id="summary"></div>
+        <p class="error hidden" id="formError"></p>
+        <button type="submit" class="primary" id="submitBtn" data-i18n="confirm">אישור הזמנה</button>
+      </form>
+    </section>
+
+    <!-- CONFIRMATION -->
+    <section id="step-done" class="step hidden">
+      <div class="done">
+        <div class="check">✓</div>
+        <h2 data-i18n="doneTitle">נקבע התור!</h2>
+        <p id="doneSummary"></p>
+        <p class="muted" data-i18n="doneNote">אישור נשמר עבור כתובת האימייל שמסרתם.</p>
+        <button class="ghost" id="bookAnother" data-i18n="another">קביעת תור נוסף</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

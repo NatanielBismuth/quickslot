@@ -1,0 +1,26 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Fully-free setup: Render's FREE web service + a FREE Neon Postgres database.
+# Storage lives in Postgres (not on disk), so data survives restarts/redeploys
+# even though the free web service has an ephemeral filesystem.
+#
+# Deploy:
+#   1. Create a free Postgres DB at https://neon.tech and copy its connection string.
+#   2. Push this repo to GitHub.
+#   3. Render → New → Blueprint → pick the repo.
+#   4. When prompted, paste the Neon string into DATABASE_URL and set ADMIN_PASSWORD.
+services:
+  - type: web
+    name: quickslot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/config
+    autoDeploy: true
+    envVars:
+      # Neon Postgres connection string (postgresql://...). Set in the dashboard.
+      - key: DATABASE_URL
+        sync: false
+      # Admin panel password. Set in the dashboard — never commit it.
+      - key: ADMIN_PASSWORD
+        sync: false
