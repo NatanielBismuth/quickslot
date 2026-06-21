@@ -56,6 +56,41 @@ function zonedToInstant(dateStr, timeStr, timeZone) {
   return guess - offset;
 }
 
+// ---------- auto-cleanup ----------
+// A booking is purged 24h after it ends: either 24h past its appointment time,
+// or (if cancelled) 24h after it was cancelled — whichever applies.
+const RETENTION_MS = 24 * 60 * 60 * 1000;
+const PURGE_THROTTLE_MS = 10 * 60 * 1000; // run at most once per 10 min
+let lastPurge = 0;
+
+async function purgeExpired() {
+  const config = await store.getConfig();
+  const tz = config.timezone || SERVER_TZ;
+  const bookings = await store.listBookings();
+  const nowMs = Date.now();
+
+  const expired = bookings.filter((b) => {
+    const apptPassed = zonedToInstant(b.date, b.time, tz) + RETENTION_MS <= nowMs;
+    const cancelledExpired =
+      b.status === 'cancelled' &&
+      b.cancelledAt &&
+      Date.parse(b.cancelledAt) + RETENTION_MS <= nowMs;
+    return apptPassed || cancelledExpired;
+  });
+
+  for (const b of expired) await store.deleteBooking(b.id);
+  if (expired.length) console.log(`Auto-purged ${expired.length} expired booking(s)`);
+  return expired.length;
+}
+
+// Throttled trigger run on incoming requests, so cleanup still happens on a
+// free host that sleeps when idle (the hourly timer below won't fire while asleep).
+function maybePurge() {
+  if (Date.now() - lastPurge < PURGE_THROTTLE_MS) return;
+  lastPurge = Date.now();
+  purgeExpired().catch((e) => console.error('purge failed:', e.message));
+}
+
 // ---------- domain logic ----------
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -223,6 +258,10 @@ function recordLoginFail(ip) {
 async function handleApi(req, res, url) {
   const { pathname } = url;
 
+  // opportunistic cleanup (throttled, fire-and-forget) so expired bookings
+  // get removed even on a free host that sleeps between visits
+  maybePurge();
+
   // POST /api/admin/login  { password } -> { token }
   if (req.method === 'POST' && pathname === '/api/admin/login') {
     const ip = clientIp(req);
@@ -308,8 +347,13 @@ async function handleApi(req, res, url) {
       status: 'confirmed',
       createdAt: new Date().toISOString(),
     };
-    await store.addBooking(booking);
-    return sendJSON(res, 201, booking);
+    // addBooking is the atomic backstop: it returns null if the slot was claimed
+    // by a concurrent request between the availability check above and this write.
+    const created = await store.addBooking(booking);
+    if (!created) {
+      return sendJSON(res, 409, { error: 'Sorry, that slot is no longer available.' });
+    }
+    return sendJSON(res, 201, created);
   }
 
   // GET /api/bookings  (admin) — list confirmed/cancelled
@@ -378,6 +422,13 @@ async function start() {
       console.warn('⚠  Using default admin password "admin". Set ADMIN_PASSWORD before exposing publicly.');
     }
   });
+  // clean up expired bookings now and hourly while the process is awake
+  purgeExpired().catch((e) => console.error('purge failed:', e.message));
+  lastPurge = Date.now();
+  setInterval(() => {
+    lastPurge = Date.now();
+    purgeExpired().catch((e) => console.error('purge failed:', e.message));
+  }, 60 * 60 * 1000).unref();
 }
 
 start().catch((err) => {

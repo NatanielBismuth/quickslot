@@ -55,6 +55,14 @@ function createFileStore(dataDir) {
     },
     async addBooking(b) {
       const all = readJSON(BOOKINGS_FILE, []);
+      // Atomic slot guard: reject if an active booking already holds this slot.
+      // This function has no `await` inside, so the read-check-write runs to
+      // completion without yielding the event loop — concurrent requests that
+      // both passed the availability check can't both land here.
+      const clash = all.some(
+        (x) => x.date === b.date && x.time === b.time && x.status !== 'cancelled'
+      );
+      if (clash) return null;
       all.push(b);
       writeJSON(BOOKINGS_FILE, all);
       return b;
@@ -64,6 +72,7 @@ function createFileStore(dataDir) {
       const i = all.findIndex((x) => x.id === id);
       if (i === -1) return null;
       all[i].status = 'cancelled';
+      all[i].cancelledAt = new Date().toISOString();
       writeJSON(BOOKINGS_FILE, all);
       return all[i];
     },
@@ -93,6 +102,14 @@ function createPgStore(connectionString) {
     async init() {
       await pool.query('CREATE TABLE IF NOT EXISTS app_config (id INT PRIMARY KEY, data JSONB NOT NULL)');
       await pool.query('CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, data JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT now())');
+      // Enforce one active booking per (date, time) at the DB level so a race
+      // between the availability check and the insert can't double-book a slot.
+      // Cancelled bookings are excluded, so a slot frees up when cancelled.
+      await pool.query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS bookings_active_slot
+         ON bookings ((data->>'date'), (data->>'time'))
+         WHERE (data->>'status') <> 'cancelled'`
+      );
       const r = await pool.query('SELECT 1 FROM app_config WHERE id = 1');
       if (r.rowCount === 0) {
         await pool.query('INSERT INTO app_config (id, data) VALUES (1, $1)', [DEFAULT_CONFIG]);
@@ -114,13 +131,19 @@ function createPgStore(connectionString) {
       return r.rows.map((x) => x.data);
     },
     async addBooking(b) {
-      await pool.query('INSERT INTO bookings (id, data) VALUES ($1, $2)', [b.id, b]);
-      return b;
+      try {
+        await pool.query('INSERT INTO bookings (id, data) VALUES ($1, $2)', [b.id, b]);
+        return b;
+      } catch (e) {
+        // 23505 = unique_violation → the slot was taken by a concurrent request.
+        if (e && e.code === '23505') return null;
+        throw e;
+      }
     },
     async cancelBooking(id) {
       const r = await pool.query('SELECT data FROM bookings WHERE id = $1', [id]);
       if (r.rowCount === 0) return null;
-      const data = { ...r.rows[0].data, status: 'cancelled' };
+      const data = { ...r.rows[0].data, status: 'cancelled', cancelledAt: new Date().toISOString() };
       await pool.query('UPDATE bookings SET data = $2 WHERE id = $1', [id, data]);
       return data;
     },
