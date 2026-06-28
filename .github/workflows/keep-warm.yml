@@ -1,42 +1,45 @@
 name: keep-warm
 
-# Pings the live app on a schedule so Render's FREE web service (which spins down
-# after ~15 min idle) stays awake, avoiding the 30-40s cold start. The target is
-# GET /api/ping, which runs a trivial `SELECT 1` so it ALSO keeps Neon Postgres
-# from autosuspending.
-#
-# ⚠ RELIABILITY: GitHub Actions cron is best-effort. Scheduled runs are routinely
-# delayed 10+ minutes under load, and GitHub auto-DISABLES scheduled workflows
-# after 60 days of repo inactivity. Treat this as a BACKUP only — the primary
-# keep-warm should be a dedicated uptime pinger (UptimeRobot / cron-job.org).
-# See README → "Keeping the app warm (cold-start fix)".
+# Keeps the free Render web service awake by pinging /api/ping every 5 minutes.
+# GitHub THROTTLES `schedule` triggers on low-traffic repos (measured ~80-min gaps),
+# which let the service sleep. So we run ONE long-lived job that loops curl every
+# 5 min, then re-dispatches itself for the next cycle. `schedule` is kept ONLY as a
+# backstop to restart the chain if a self-handoff is ever missed.
 
 on:
-  schedule:
-    # Every 10 minutes (Render spins down at ~15 min idle, so this leaves margin).
-    - cron: "*/10 * * * *"
   workflow_dispatch: {}
+  schedule:
+    - cron: "*/15 * * * *"
 
-# Don't pile up overlapping pings if a run is slow.
+permissions:
+  actions: write
+
 concurrency:
   group: keep-warm
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 340
     steps:
-      - name: Ping /api/ping
+      - name: Ping /api/ping every 5 min (~5.4h)
         env:
-          # REQUIRED: set this repo variable to your live Render URL (no trailing slash):
-          #   Settings → Secrets and variables → Actions → Variables → New → APP_URL
-          #   e.g. https://quickslot.onrender.com
           APP_URL: ${{ vars.APP_URL }}
         run: |
-          if [ -z "$APP_URL" ]; then
-            echo "::error::APP_URL repo variable is not set. Add it under Settings → Secrets and variables → Actions → Variables."
-            exit 1
+          set -u
+          if [ -z "${APP_URL:-}" ]; then
+            echo "::error::APP_URL repo variable is not set."; exit 1
           fi
-          echo "Pinging ${APP_URL}/api/ping"
-          # --max-time covers the worst case where THIS ping is the cold-start one.
-          curl -fsS --max-time 60 --retry 2 --retry-delay 10 "${APP_URL%/}/api/ping"
+          BASE="${APP_URL%/}"
+          END=$(( SECONDS + 19500 ))
+          while [ "$SECONDS" -lt "$END" ]; do
+            CODE=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 60 --retry 2 --retry-delay 5 "$BASE/api/ping" || echo "ERR")
+            echo "$(date -u +%H:%M:%SZ) ping $BASE/api/ping -> $CODE"
+            sleep 300
+          done
+      - name: Hand off to next cycle
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run keep-warm.yml --ref master
