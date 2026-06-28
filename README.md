@@ -60,6 +60,42 @@ filesystem. Locally (no `DATABASE_URL`) it keeps using JSON files — zero confi
 **Railway** works the same way: deploy the repo, add a Postgres plugin (it sets
 `DATABASE_URL` for you), and set `ADMIN_PASSWORD`.
 
+### Keeping the app warm (cold-start fix)
+
+Render's free web service spins down after ~15 min idle **and** Neon Postgres
+autosuspends when idle, so the first visit after a quiet stretch takes ~30–40s to wake.
+The app exposes `GET /api/ping`, a tiny no-auth endpoint that runs a `SELECT 1` — so a
+single periodic ping wakes **both** Render and Neon. Pick one of these:
+
+**1. External uptime pinger — RECOMMENDED (most reliable).**
+A dedicated monitor pings on a real schedule and keeps working indefinitely. Free options:
+- [UptimeRobot](https://uptimerobot.com) — free plan, 5-minute interval.
+- [cron-job.org](https://cron-job.org) — free, intervals down to 1 minute.
+
+Set the monitor to **GET** `https://<your-app>.onrender.com/api/ping` every **5 minutes**.
+That's it — no GitHub involved, and it survives repo inactivity.
+*Trade-off:* a third-party account to manage; free tiers don't go below ~5 min (fine here,
+since Render only sleeps at ~15 min idle).
+
+**2. GitHub Actions workflow — BACKUP (zero extra accounts, but unreliable timing).**
+`.github/workflows/keep-warm.yml` curls `/api/ping` every ~10 min (and on manual
+`workflow_dispatch`). Set the target once:
+**Settings → Secrets and variables → Actions → Variables → New repository variable**,
+name `APP_URL`, value your full Render URL with no trailing slash
+(e.g. `https://your-app.onrender.com`). The workflow errors out clearly if `APP_URL`
+is unset.
+*Trade-offs — be aware:* GitHub's scheduled cron is **best-effort** and routinely delayed
+10–30+ min under load (it can miss the 15-min window and let the app sleep), and GitHub
+**auto-disables scheduled workflows after 60 days of repo inactivity**. Good as a free
+fallback, not as the sole mechanism.
+
+**3. Upgrade Render to Starter ($7/mo) — pay to remove the problem.**
+Render's [Starter plan](https://render.com/pricing) does **not** spin down, so there's no
+cold start at all and no pinger to maintain. Note Neon's free DB can still autosuspend, so
+keep `/api/ping` traffic (or upgrade Neon) if you want the DB hot too.
+*Trade-off:* it costs money — but it's the only option that fully eliminates the wake
+delay with zero moving parts.
+
 ### Environment variables
 | Var | Purpose |
 |-----|---------|
@@ -83,6 +119,7 @@ filesystem. Locally (no `DATABASE_URL`) it keeps using JSON files — zero confi
 ## API
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
+| GET | `/api/ping` | — | health/keep-warm ping (runs `SELECT 1` to keep Neon awake) |
 | POST | `/api/admin/login` | — | exchange password for a session token |
 | GET | `/api/config` | — | availability settings |
 | PUT | `/api/config` | admin | update settings |

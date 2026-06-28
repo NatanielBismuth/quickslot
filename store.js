@@ -119,6 +119,10 @@ function createFileStore(dataDir) {
       writeJSON(BOOKINGS_FILE, remaining);
       return true;
     },
+    // Keep-warm/health probe. No DB in file mode — just report healthy.
+    async ping() {
+      return { ok: true };
+    },
   };
 }
 
@@ -186,6 +190,11 @@ function createPgStore(connectionString) {
     async deleteBooking(id) {
       const r = await pool.query('DELETE FROM bookings WHERE id = $1', [id]);
       return r.rowCount > 0;
+    },
+    // Keep-warm/health probe: a trivial query that wakes/keeps Neon's compute warm.
+    async ping() {
+      await pool.query('SELECT 1');
+      return { ok: true };
     },
   };
 }

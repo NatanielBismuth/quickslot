@@ -271,6 +271,18 @@ function recordLoginFail(ip) {
 async function handleApi(req, res, url) {
   const { pathname } = url;
 
+  // GET /api/ping  (public) — cheap keep-warm/health probe. Runs a trivial DB query
+  // to keep Neon's compute warm. Handled before maybePurge() so it stays light and
+  // never triggers the purge/schema paths. 200 when the DB answers, 503 if it throws.
+  if (req.method === 'GET' && pathname === '/api/ping') {
+    try {
+      await store.ping();
+      return sendJSON(res, 200, { ok: true });
+    } catch (e) {
+      return sendJSON(res, 503, { ok: false });
+    }
+  }
+
   // opportunistic cleanup (throttled, fire-and-forget) so expired bookings
   // get removed even on a free host that sleeps between visits
   maybePurge();
@@ -460,6 +472,8 @@ async function start() {
       console.warn('⚠  Using default admin password "admin". Set ADMIN_PASSWORD before exposing publicly.');
     }
   });
+  // pre-warm the DB pool so the first real request doesn't pay Neon's cold-connect cost
+  store.ping().catch((e) => console.error('warm-up ping failed:', e.message));
   // clean up expired bookings now and hourly while the process is awake
   purgeExpired().catch((e) => console.error('purge failed:', e.message));
   lastPurge = Date.now();
